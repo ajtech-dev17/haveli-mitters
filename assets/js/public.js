@@ -26,6 +26,7 @@ import {
   canSeeStats,
 } from "./core.js";
 import { aggregate, overs, seasonSummary } from "./stats.js";
+import { sessionIdentityChanged } from "./session-refresh.js";
 const main = $("#main");
 const complete = () => S.matches.filter((m) => m.status === "completed");
 const rows = (id, season = "") =>
@@ -537,9 +538,20 @@ if (db() && page !== "player") {
   };
   check();
   policyTimer = setInterval(check, 15000);
-  db().auth.onAuthStateChange((event) => {
-    if (["SIGNED_OUT", "SIGNED_IN", "USER_UPDATED"].includes(event))
+  const identityChanged = sessionIdentityChanged();
+  let authReloadQueued = false;
+  db().auth.onAuthStateChange((event, session) => {
+    if (identityChanged(event, session) && !authReloadQueued) {
+      authReloadQueued = true;
+      clearPortraits();
+      S.players = [];
+      S.stats = [];
+      const modal = $("#modal");
+      if (modal?.open) modal.close();
+      if (modal) modal.innerHTML = "";
+      main.innerHTML = "";
       setTimeout(() => location.reload(), 0);
+    }
   });
   window.addEventListener("pagehide", () => clearInterval(policyTimer));
 }
