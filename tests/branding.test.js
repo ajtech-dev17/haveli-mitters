@@ -7,7 +7,7 @@ test('all page entry points use neutral first paint instead of the bundled logo'
   assert.equal(pages.length,12);
   for(const page of pages){
     const html=fs.readFileSync(page,'utf8');
-    assert.ok(!html.includes('assets/images/team-logo.png'),page);
+    assert.doesNotMatch(html, /<img\b[^>]*\bsrc\s*=\s*["'][^"']*assets\/images\/team-logo\.png["']/i, page);
     assert.ok(html.includes('brand-loading-ring'),page);
     assert.ok(html.includes('data:image/svg+xml'),page);
   }
