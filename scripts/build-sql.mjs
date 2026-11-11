@@ -24,6 +24,6 @@ fs.writeFileSync(
 fs.writeFileSync(
   "sql/migrate-prefix.sql",
   "-- 03 - Haveli Mitters - HM Prefix Migration v3.1\n-- Existing old-prefix v2/v3 ONLY. Back up first; read docs/HM-MIGRATION.md.\n-- One transaction: an error rolls back the database rename.\nbegin;\n" +
-    body("sql/rename-prefix.sql") + "\n" + ext +
+    body("sql/rename-prefix.sql") + "\n" + body("sql/repair-media-policies.sql") + "\n" + ext +
     "\nnotify pgrst, 'reload schema';\ncommit;\n",
 );

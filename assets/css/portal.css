@@ -2044,3 +2044,8 @@ button:disabled {
     display: none;
   }
 }
+
+/* Neutral first paint: never flash the bundled logo before published settings. */
+.brand-loading-ring { display:inline-block;width:64px;height:64px;border:3px solid #d8b57433;border-top-color:#d8b574;border-radius:50%;animation:brand-loading-spin 1s linear infinite; }
+@keyframes brand-loading-spin { to { transform:rotate(360deg); } }
+@media(prefers-reduced-motion:reduce) { .brand-loading-ring { animation:none; } }

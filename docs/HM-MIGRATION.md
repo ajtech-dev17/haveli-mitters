@@ -45,3 +45,9 @@ Reference: [Supabase Storage schema](https://supabase.com/docs/guides/storage/sc
 5. Supabase SQL Editor ki pehle saved query titles manually HM wale names kar dein. Query titles browser/app code ka hissa nahi hain; is ZIP se unke saved titles automatically change nahi honge.
 
 `sql/base-v2.sql`, `sql/upgrade-v3.sql`, `sql/live-v3.sql`, `sql/rename-prefix.sql` source parts hain. Normal setup/migration mein complete generated file hi run karein.
+
+## Logo/media upload permission repair (12 November 2026)
+
+Earlier migration assumed that the old media Storage policies still existed after bucket cleanup. If cleanup also removed those policies, the new media bucket could reject admin uploads with `new row violates row-level security policy`. The generated migration now explicitly restores all four HM media policies.
+
+Already migrated? Run only `sql/repair-media-policies.sql`, saved as **06 - Haveli Mitters - HM Media Upload Permissions**. It recreates the four named policies, restricted to `hm-media` and approved admins. It does not delete files, change login credentials or roles, disable RLS, or alter portrait privacy. Refresh admin, select the logo again and Publish. No frontend deployment is required for this SQL-only repair. If the error continues, inspect the failing Storage/REST request to distinguish upload permissions from settings-draft permissions.

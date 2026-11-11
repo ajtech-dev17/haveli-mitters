@@ -1,4 +1,5 @@
 import { applyAppearance } from "./appearance.js";
+import { syncBranding } from "./branding.js";
 import { ur, en } from "./i18n.js";
 export const defaults = {
   brand_name: "Haveli Mitters",
@@ -183,9 +184,11 @@ export async function settings() {
         flags: { ...defaults.flags, ...r.config.flags },
       };
       S.revision = r.revision;
+      S.brandingReady = true;
       S.loadError = null;
     } catch (error) {
       S.loadError = error.message;
+      if (!S.brandingReady) S.config.logo_url = "";
     }
   }
   applyPreferences();
@@ -196,9 +199,10 @@ export function applyPreferences() {
   document.documentElement.dataset.theme =
     getPref("theme") || S.config.default_theme || "dark";
   applyAppearance(S.config.appearance);
+  syncBranding(document, url(S.config.logo_url), local(S.config, "brand_name"));
 }
 export function brand() {
-  return `<a class="brand" href="index.html"><img src="${e(url(S.config.logo_url))}" alt="${e(local(S.config, "brand_name"))}" width="56" height="56"><span><strong>${e(local(S.config, "brand_name"))}</strong><small>${t("Official team portal")}</small></span></a>`;
+  return `<a class="brand" href="index.html">${url(S.config.logo_url) ? `<img src="${e(url(S.config.logo_url))}" alt="${e(local(S.config, "brand_name"))}" width="56" height="56">` : ""}<span><strong>${e(local(S.config, "brand_name"))}</strong><small>${t("Official team portal")}</small></span></a>`;
 }
 export const routes = [
   ["home", "index.html", "Home"],

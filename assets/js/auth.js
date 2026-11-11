@@ -17,7 +17,7 @@ const root = $("#main"),
 let mode = params.get("mode") || "login";
 const invitation = params.get("invite") || "";
 function frame(body) {
-  root.innerHTML = `<div class="auth-shell"><section class="panel auth-card"><div class="row between"><a href="index.html" class="text-btn">← ${t("Home")}</a><div class="actions">${themeButtons()}</div></div><img class="auth-logo" src="${e(url(S.config.logo_url))}" alt="${e(local(S.config, "brand_name"))}"><h1>${t("Captain’s desk")}</h1>${body}</section></div>`;
+  root.innerHTML = `<div class="auth-shell"><section class="panel auth-card"><div class="row between"><a href="index.html" class="text-btn">← ${t("Home")}</a><div class="actions">${themeButtons()}</div></div>${url(S.config.logo_url) ? `<img class="auth-logo" src="${e(url(S.config.logo_url))}" alt="${e(local(S.config, "brand_name"))}">` : ""}<h1>${t("Captain’s desk")}</h1>${body}</section></div>`;
   bindCommon();
 }
 const field = (id, label, type = "text", required = true) =>

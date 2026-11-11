@@ -107,6 +107,32 @@ insert into storage.buckets(id,name,public,file_size_limit,allowed_mime_types)
 values('hm-media','hm-media',true,41943040,array['image/jpeg','image/png','image/webp','audio/mpeg','audio/mp4','audio/ogg','audio/wav','video/mp4','video/webm'])
 on conflict(id) do nothing;
 
+-- 06 - Haveli Mitters - HM Media Upload Permissions
+-- Restore only this portal's four media policies. Does not delete files,
+-- change accounts, disable RLS, or make private portraits public.
+do $$ begin
+ if to_regprocedure('public.hm_is_admin()') is null then
+  raise exception 'HM schema missing. Complete the HM setup/migration first.';
+ end if;
+ if not exists(select 1 from storage.buckets where id='hm-media') then
+  raise exception 'hm-media bucket missing. Complete the HM migration first.';
+ end if;
+end $$;
+drop policy if exists hm_read on storage.objects;
+drop policy if exists hm_upload on storage.objects;
+drop policy if exists hm_update on storage.objects;
+drop policy if exists hm_delete on storage.objects;
+
+create policy hm_read on storage.objects for select to authenticated
+ using (bucket_id='hm-media' and public.hm_is_admin());
+create policy hm_upload on storage.objects for insert to authenticated
+ with check (bucket_id='hm-media' and public.hm_is_admin());
+create policy hm_update on storage.objects for update to authenticated
+ using (bucket_id='hm-media' and public.hm_is_admin())
+ with check (bucket_id='hm-media' and public.hm_is_admin());
+create policy hm_delete on storage.objects for delete to authenticated
+ using (bucket_id='hm-media' and public.hm_is_admin());
+
 -- Haveli Mitters v3: apply AFTER v2 only. Fresh installs use setup.sql instead.
 alter table public.hm_players add column if not exists profile_visibility text not null default 'inherit' check(profile_visibility in ('inherit','public','private'));
 alter table public.hm_players add column if not exists stats_visibility text not null default 'inherit' check(stats_visibility in ('inherit','public','private'));

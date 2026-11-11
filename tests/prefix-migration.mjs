@@ -16,7 +16,8 @@ const bootstrap=`create role anon;create role authenticated;create schema auth;c
  grant usage on schema auth,storage to anon,authenticated;grant execute on function auth.uid() to anon,authenticated;
  create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
  create table storage.objects(id uuid default gen_random_uuid(),bucket_id text,name text);alter table storage.objects enable row level security;
- grant select on storage.objects to anon,authenticated;`;
+ grant select on storage.objects to anon,authenticated;
+ grant insert,update,delete on storage.objects to authenticated;`;
 await run(bootstrap);
 await run(gunzipSync(fs.readFileSync('tests/fixtures/legacy-v3.sql.gz')).toString());
 const [owner,playerUser,stranger]=Array.from({length:3},()=>randomUUID());
@@ -61,6 +62,8 @@ await rejectMigration(/Storage preparation needed/);
 await run("insert into storage.buckets(id,name,public) values('hm-portraits','hm-portraits',false),('hm-media','hm-media',true)");
 await q("insert into storage.objects(bucket_id,name) values('hm-portraits',$1),('hm-media','logo.png'),('hm-media','win.webp')",[players[0]+'/portrait.webp']);
 await run("delete from storage.objects where bucket_id='hh-portraits';delete from storage.buckets where id in ('hh-portraits','hh-media')");
+// Bucket cleanup can remove its related policies too; migration must rebuild them.
+await run('drop policy hh_read on storage.objects;drop policy hh_upload on storage.objects;drop policy hh_update on storage.objects;drop policy hh_delete on storage.objects');
 await run(migration);
 assert.equal((await q("select 'hm_players'::regclass::oid oid"))[0].oid,originalOid);
 for(const table of preserved) assert.deepEqual((await q(`select to_jsonb(t) data from hm_${table} t order by to_jsonb(t)::text`)).map(x=>x.data),snapshots.get(table),table+' rows must survive');
@@ -78,6 +81,7 @@ assert.equal((await q('select * from hm_stats')).length,0);
 assert.equal((await q("select * from storage.objects where bucket_id='hm-portraits'")).length,0);
 await assert.rejects(()=>q("select hm_publish_settings(1,'{}')"),/permission denied/);
 await as(playerUser);
+await assert.rejects(()=>q("insert into storage.objects(bucket_id,name) values('hm-media','unauthorized.jpg')"),/row-level security/);
 assert.equal((await q('select * from hm_players')).length,2);
 assert.equal((await q('select runs from hm_stats'))[0].runs,20);
 assert.equal((await q("select * from storage.objects where bucket_id='hm-portraits'")).length,1);
@@ -86,12 +90,27 @@ await as(stranger);assert.equal((await q('select * from hm_stats')).length,0);
 await q('select hm_redeem_invite($1)',[pending]); // Existing unredeemed token still works.
 assert.equal((await q('select hm_is_admin() ok'))[0].ok,true);
 await as(owner);
+await q("insert into storage.objects(bucket_id,name) values('hm-media','admin-logo.jpg')");
+await assert.rejects(()=>q("insert into storage.objects(bucket_id,name) values('unrelated-bucket','blocked.jpg')"),/row-level security/);
+assert.equal((await q("update storage.objects set name='updated-logo.jpg' where name='admin-logo.jpg' returning name")).length,1);
+assert.equal((await q("delete from storage.objects where name='updated-logo.jpg' returning name")).length,1);
+// Standalone repair also works on an already-migrated deployment, and is repeatable.
+await run('reset role;drop policy hm_upload on storage.objects');
+await as(owner);
+await assert.rejects(()=>q("insert into storage.objects(bucket_id,name) values('hm-media','repair-test.jpg')"),/row-level security/);
+await run('reset role');
+const repair=fs.readFileSync('sql/repair-media-policies.sql','utf8');
+await run(repair);await run(repair);
+await as(owner);
+await q("insert into storage.objects(bucket_id,name) values('hm-media','repair-test.jpg')");
+await q("delete from storage.objects where name='repair-test.jpg'");
 const updated=await cmd('hm','delivery',{kind:'legal',runs:1});
 assert.equal(updated.state.innings[0].runs,5);
 await q('select hm_save_match($1,1,$2,$3)',[mid,{...manual,team_runs:25},[{...score[0],runs:25}]]);
 assert.equal((await q('select runs from hm_stats where match_id=$1',[mid]))[0].runs,25);
 await q('select hm_create_invite($1)',['future@example.test']); // Renamed sequence still increments.
 console.log('PASS original HH v3 → HM: preserved rows/OIDs/ACLs, live history, owner/player links, invitations, private stats/portraits, safe rerun, conflict and Storage guards.');
+console.log('PASS rebuilt media upload policies and standalone repair: admin CRUD, non-admin rejection, other-bucket isolation and idempotence.');
 await db.close();
 
 // Original v2 has fewer columns/functions; the same conversion upgrades it to HM v3.
