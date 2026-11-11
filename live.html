@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en" dir="ltr" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#171310" />
+    <meta
+      name="description"
+      content="Haveli Mitters official team portal. Squad, cricket statistics, fixtures and our winning moments."
+    />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <meta name="robots" content="index, follow" />
+    <title>Live match · Haveli Mitters</title>
+    <link rel="icon" type="image/png" href="assets/images/team-logo.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <script>
+      try {
+        const t = localStorage.getItem("hm-theme"),
+          l = localStorage.getItem("hm-language");
+        if (t) document.documentElement.dataset.theme = t;
+        if (l) {
+          document.documentElement.lang = l;
+          document.documentElement.dir = l === "ur" ? "rtl" : "ltr";
+        }
+      } catch {}
+    </script>
+    <link rel="stylesheet" href="assets/css/portal.css" />
+    <script defer src="assets/vendor/supabase-2.119.0.js"></script>
+    <script src="assets/js/config.js"></script>
+    <script defer src="assets/js/startup.js"></script>
+    <script type="module" src="assets/js/live.js"></script>
+  </head>
+  <body data-page="live">
+    <a class="skip-link" href="#main">Skip to content / مرکزی مواد</a>
+    <div id="header"></div>
+    <main id="main" tabindex="-1">
+      <div class="loading-state" role="status">
+        <img
+          src="assets/images/team-logo.png"
+          alt="Haveli Mitters"
+          width="110"
+          height="110"
+        />
+        <p>Loading the clubhouse… / لوڈ ہو رہا ہے</p>
+      </div>
+    </main>
+    <div id="footer"></div>
+    <dialog id="modal" aria-label="Details"></dialog>
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <noscript
+      ><div class="wrap error-banner">
+        Please enable JavaScript to use this team portal. براہ کرم جاوا اسکرپٹ
+        فعال کریں۔
+      </div></noscript
+    >
+  </body>
+</html>

@@ -1,0 +1,30 @@
+HAVELI MITTERS — VERSION 3.1 (HM)
+
+1. ZIP extract karein. Pehle docs/SETUP.md read karein.
+2. Bilkul naya database: sql/setup.sql run karein.
+   Purane hh_ tables maujood hain: docs/HM-MIGRATION.md follow karein,
+   phir sql/migrate-prefix.sql run karein. Purane tables delete na karein.
+   Har case mein sql/check-setup.sql se HM tables verify karein.
+3. assets/js/config.js mein aapka diya hua Project URL + PUBLIC publishable key set hai.
+   Project change karein to dono values update karein. Hosted connection abhi verify karni hai.
+4. GitHub repo mein files push karein. Settings > Pages > GitHub Actions.
+5. Supabase Auth URLs / SMTP configure karein. docs/SETUP.md mein exact steps hain.
+6. admin.html par account banayein; sql/first-owner.sql se apni confirmed email ko owner banayein.
+7. Admin dashboard se real squad, matches aur content add/publish karein.
+
+Public default ON hai. Private player accounts aur live score control implemented hain.
+Live scoring: docs/LIVE-SCORING.md
+Player privacy: docs/PRIVACY.md
+Client handover: docs/HANDOVER.md
+
+HTML double-click na karein. VS Code Live Server use karein, ya:
+python -m http.server 8000
+Phir http://localhost:8000/ kholein.
+
+Actual Supabase connection, email delivery aur GitHub deployment abhi user configuration ke baad verify hone hain.
+
+SQL query names:
+01 - Haveli Mitters - HM Database Setup v3.1
+02 - Haveli Mitters - HM Database Check
+03 - Haveli Mitters - HM Prefix Migration v3.1 (sirf purana database)
+04 - Haveli Mitters - HM First Owner (sql/first-owner.sql)
