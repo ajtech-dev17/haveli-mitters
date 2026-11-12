@@ -2049,3 +2049,13 @@ button:disabled {
 .brand-loading-ring { display:inline-block;width:64px;height:64px;border:3px solid #d8b57433;border-top-color:#d8b574;border-radius:50%;animation:brand-loading-spin 1s linear infinite; }
 @keyframes brand-loading-spin { to { transform:rotate(360deg); } }
 @media(prefers-reduced-motion:reduce) { .brand-loading-ring { animation:none; } }
+
+
+/* Card ke image container ya image tag par ye properties set karein */
+.player-card img {
+  width: 100%;
+  height: 220px; /* Apne design ke mutabiq height adjust karein */
+  object-fit: cover;
+  object-position: top center; /* Taake chehra (face) center mein rahe */
+  border-radius: 12px 12px 0 0;
+}
