@@ -2059,3 +2059,60 @@ button:disabled {
   object-position: top center; /* Taake chehra (face) center mein rahe */
   border-radius: 12px 12px 0 0;
 }
+
+
+/* =========================================
+   SQUAD CARD & IMAGE OVERLAP COMPLETE FIX
+   ========================================= */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+/* Player Card Image Container Fix */
+.player-photo {
+  height: 250px !important;
+  overflow: hidden !important;
+  position: relative;
+  border-radius: 19px 19px 0 0;
+}
+
+.player-photo img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  object-position: top center !important; /* Chehra center/top mein rahega */
+  display: block;
+}
+
+/* Tasveer par dark gradient taake #17 aur text wazeh rahe */
+.player-photo::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(23, 19, 16, 0.55) 0%,
+    transparent 45%,
+    rgba(23, 19, 16, 0.9) 100%
+  );
+  pointer-events: none;
+}
+
+/* Jersey Number (#17) ko saaf dikhane ke liye */
+.player-photo .jersey {
+  z-index: 2;
+  opacity: 0.95 !important;
+  background: rgba(23, 19, 16, 0.75);
+  color: var(--gold) !important;
+  border: 1px solid var(--line);
+  padding: 4px 12px;
+  border-radius: 99px;
+  font-size: 16px !important;
+}
+
+/* Card ke neeche wale text ko image se alag rakhne ke liye */
+.player-body {
+  position: relative;
+  z-index: 2;
+  background: var(--panel);
+}
