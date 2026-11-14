@@ -5,7 +5,7 @@ const options = (list, value = "") =>
   list
     .map(
       (p) =>
-        `<option value="${p.id}" ${p.id === value ? "selected" : ""}>${e(p.name)}</option>`,
+        `<option value="${p.id}" data-side="${e(p.side || "")}" ${p.id === value ? "selected" : ""}>${e(p.name)}</option>`,
     )
     .join("");
 const select = (name, label, list, value = "") =>
@@ -321,7 +321,15 @@ export function mountScoring(root) {
       };
       $("#choose-bowler", body).onsubmit = (ev) => {
         ev.preventDefault();
-        send("bowler", Object.fromEntries(new FormData(ev.currentTarget)));
+        const form = new FormData(ev.currentTarget),
+          select = ev.currentTarget.elements.id,
+          option = select?.selectedOptions?.[0],
+          payload = {
+            id: form.get("id"),
+            name: option?.textContent?.trim() || "",
+            side: option?.dataset?.side || "",
+          };
+        send("bowler", payload);
       };
       $$("[data-quick]", body).forEach(
         (b) =>

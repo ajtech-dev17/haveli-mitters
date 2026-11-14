@@ -214,7 +214,6 @@ export const routes = [
   ["moments", "moments.html", "Moments"],
   ["social", "social.html", "Social & media"],
   ["location", "location.html", "Location"],
-  ["player", "player.html", "Player login"],
 ];
 export function themeButtons() {
   return `${flag("language_switch") ? '<button class="icon-btn" data-language aria-label="Language">' + (lang() === "ur" ? "EN" : "اردو") + "</button>" : ""}${flag("theme_switch") ? '<button class="icon-btn" data-theme aria-label="' + t("Theme") + '">◐</button>' : ""}`;

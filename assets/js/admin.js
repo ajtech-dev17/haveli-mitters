@@ -1,5 +1,5 @@
 import { mountScoring } from "./scoring.js";
-import { appearancePanel, playerAccessPanel } from "./admin-v3.js";
+import { appearancePanel } from "./admin-v3.js";
 import {
   S,
   $,
@@ -37,7 +37,6 @@ const sections = [
   ["players", "Players"],
   ["matches", "Matches"],
   ["live", "Live scoring"],
-  ["player_access", "Player access"],
   ["appearance", "Appearance"],
   ["moments", "Gallery"],
   ["media", "Media & social"],
@@ -187,7 +186,6 @@ function render() {
   else if (["players", "matches", "moments", "media"].includes(tab))
     collection();
   else if (tab === "live") stopExtra = mountScoring($("#content"));
-  else if (tab === "player_access") playerAccessPanel($("#content"));
   else if (tab === "appearance") appearancePanel($("#content"));
   else if (tab === "controls") controls();
   else if (tab === "location") locationEditor();
@@ -541,7 +539,6 @@ const features = [
   ["live_location", "Live location"],
   ["team", "Our team"],
   ["live", "Live scoring and viewer"],
-  ["player", "Player login"],
   ["back_to_top", "Back to top"],
   ["theme_switch", "Theme switch"],
   ["language_switch", "Language switch"],
@@ -760,71 +757,7 @@ async function access() {
   members = await api(db().rpc("hm_members"));
   if (tab !== "access") return;
   $("#content").innerHTML =
-    `<section class="admin-card"><h3>${t("Team access")} · ${members.length}/2</h3><div class="table-wrap"><table><thead><tr><th>${t("Display name")}</th><th>${t("Email")}</th><th>${t("Role")}</th><th>${t("Edit")}</th></tr></thead><tbody>${members.map((m) => `<tr><td>${e(m.display_name || "—")}</td><td class="ltr">${e(m.email)}</td><td>${t(m.role === "owner" ? "Owner" : "Admin")}</td><td>${S.role === "owner" && m.user_id !== S.user.id ? `<button class="text-btn" data-remove="${m.user_id}">${t("Remove access")}</button>` : "—"}</td></tr>`).join("")}</tbody></table></div></section>${
-      S.role === "owner"
-        ? `<section class="admin-card"><h3>${t("Invite second admin")}</h3><form id="invite-form"><label class="field"><span>${t("Email")}</span><input name="email" type="email" required></label><button class="btn">${t("Create invitation link")}</button></form><p id="invite-link" class="note ltr" style="overflow-wrap:anywhere;margin-top:18px"></p></section><section class="admin-card"><h3>${t("Transfer ownership")}</h3><form id="transfer-form"><label class="field"><span>${t("Admin")}</span><select name="user" required><option value="">—</option>${members
-            .filter((m) => m.user_id !== S.user.id)
-            .map((m) => `<option value="${m.user_id}">${e(m.email)}</option>`)
-            .join(
-              "",
-            )}</select></label><label class="toggle-row"><span>${t("Leave after handover")}</span><input name="leave" type="checkbox" checked></label><button class="btn" style="margin-top:18px">${t("Transfer ownership")}</button></form></section>`
-        : ""
-    }`;
-  $$("[data-remove]").forEach(
-    (b) =>
-      (b.onclick = async () => {
-        if (!confirm(t("Remove access") + "?")) return;
-        try {
-          await api(db().rpc("hm_remove_admin", { p_user: b.dataset.remove }));
-          access();
-        } catch (err) {
-          toast(err.message, true);
-        }
-      }),
-  );
-  $("#invite-form")?.addEventListener("submit", async (ev) => {
-    ev.preventDefault();
-    try {
-      const token = await api(
-        db().rpc("hm_create_invite", {
-          p_email: new FormData(ev.currentTarget).get("email"),
-        }),
-      );
-      const u = new URL("account.html", location.href);
-      u.searchParams.set("invite", token);
-      $("#invite-link").textContent = u.href;
-      toast(
-        t(
-          "Copy this invitation link and share it with that admin. Valid for 48 hours.",
-        ),
-      );
-    } catch (err) {
-      toast(err.message, true);
-    }
-  });
-  $("#transfer-form")?.addEventListener("submit", async (ev) => {
-    ev.preventDefault();
-    const f = new FormData(ev.currentTarget);
-    if (
-      !confirm(
-        t("Transfer owner permissions to the selected admin?") +
-          " " +
-          (f.get("leave") ? t("Your admin access will be removed.") : ""),
-      )
-    )
-      return;
-    try {
-      await api(
-        db().rpc("hm_transfer_owner", {
-          p_user: f.get("user"),
-          p_leave: f.get("leave") === "on",
-        }),
-      );
-      location.reload();
-    } catch (err) {
-      toast(err.message, true);
-    }
-  });
+    `<section class="admin-card"><h3>${t("Admin access")}</h3><p class="note">${t("Single-admin mode is active. Only the configured authorized admin can create, publish, and score matches. Player invitations and second-admin grants are disabled.")}</p><div class="table-wrap"><table><thead><tr><th>${t("Display name")}</th><th>${t("Email")}</th><th>${t("Role")}</th></tr></thead><tbody>${members.map((m) => `<tr><td>${e(m.display_name || "—")}</td><td class="ltr">${e(m.email)}</td><td>${t(m.role === "owner" ? "Owner" : "Admin")}</td></tr>`).join("")}</tbody></table></div></section>`;
 }
 function account() {
   $("#content").innerHTML =

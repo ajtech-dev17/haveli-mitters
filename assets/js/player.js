@@ -152,7 +152,7 @@ async function enter() {
   );
   if (!link) {
     frame(
-      `<h3>${t("Account not linked yet")}</h3><p class="note">${t("Ask the captain for your player invitation link.")}</p><p class="ltr">${e(user.email)}</p><button class="btn secondary" id="logout">${t("Sign out")}</button>`,
+      `<h3>${t("Admin access only")}</h3><p class="note">${t("This account is not linked to a player profile. Live match setup and scoring are available only to the single authorized admin account.")}</p><p class="ltr">${e(user.email)}</p><div class="row"><a class="btn" href="admin.html">${t("Open Captain’s Desk")}</a><button class="btn secondary" id="logout">${t("Sign out")}</button></div>`,
     );
     $("#logout").onclick = signout;
     return;

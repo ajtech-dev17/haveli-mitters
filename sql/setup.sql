@@ -574,9 +574,19 @@ begin
   end loop;
   i:=jsonb_set(jsonb_set(jsonb_set(i,'{striker}',to_jsonb(tmp)),'{non_striker}',to_jsonb(outid)),'{batters}',bats);
  elsif act='bowler' then
-  tmp:=p->>'id';
+  tmp:=coalesce(nullif(p->>'id',''),nullif(p->>'player_id',''));
   if bow<>'' then raise exception 'A bowler is already selected for this over'; end if;
-  if not exists(select 1 from jsonb_array_elements(lu) x where x->>'id'=tmp and x->>'side'<>side) then raise exception 'Choose a bowler from the fielding side'; end if;
+  -- Prefer the immutable lineup-row UUID. For older clients or migrated data,
+  -- reconcile by player_id/name, but always retain the opposite-side guard.
+  if not exists(select 1 from jsonb_array_elements(lu) x where x->>'id'=tmp and x->>'side'<>side) then
+   select x->>'id' into tmp
+   from jsonb_array_elements(lu) x
+   where x->>'side'<>side
+     and ((nullif(p->>'player_id','') is not null and x->>'player_id'=p->>'player_id')
+       or (nullif(p->>'name','') is not null and lower(trim(x->>'name'))=lower(trim(p->>'name'))))
+   limit 1;
+  end if;
+  if tmp is null or not exists(select 1 from jsonb_array_elements(lu) x where x->>'id'=tmp and x->>'side'<>side) then raise exception 'Choose a bowler from the fielding side'; end if;
   if tmp=i->>'last_bowler' then raise exception 'A bowler cannot bowl consecutive overs'; end if;
   limitbow:=(cfg->>'max_bowler_overs')::int*6;
   if coalesce((bowls->tmp->>'balls')::int,0)>=limitbow then raise exception 'Bowler has reached the configured overs limit'; end if;

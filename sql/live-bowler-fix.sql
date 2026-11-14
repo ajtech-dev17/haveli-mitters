@@ -1,0 +1,259 @@
+-- Live scoring bowler-side repair. Apply after the v3 schema.
+begin;
+
+create or replace function public.hm_reduce(st jsonb,act text,p jsonb,lu jsonb,cfg jsonb) returns jsonb
+language plpgsql immutable set search_path='' as $$
+declare i jsonb; idx int; phase text; side text; bat text; nonbat text; bow text; tmp text; outid text; fielder text;
+ kind text; dismiss text; nbkind text; nr int; boundary int; total int; batruns int; charged int; legal int; faced int;
+ bats jsonb; bowls jsonb; fields jsonb; b jsonb; bw jsonb; fi jsonb; extra jsonb; recent jsonb;
+ crossed boolean; maxw int; limitbow int; r record;
+begin
+ if jsonb_typeof(p)<>'object' then raise exception 'Invalid scoring input'; end if;
+ phase:=st->>'phase'; idx:=jsonb_array_length(st->'innings')-1; i:=st->'innings'->idx;
+ side:=i->>'side'; bats:=i->'batters'; bowls:=i->'bowlers'; fields:=i->'fielding';
+ bat:=i->>'striker'; nonbat:=i->>'non_striker'; bow:=i->>'bowler';
+ if act='second_innings' then
+  if phase<>'break' or idx<>0 then raise exception 'Finish the first innings before starting the chase'; end if;
+  return jsonb_set(jsonb_set(st,'{innings}',(st->'innings')||jsonb_build_array(public.hm_innings(case when side='home' then 'away' else 'home' end,(cfg->>'overs')::int*6,(i->>'runs')::int+1))),'{phase}','"live"');
+ end if;
+ if act='reopen' then
+  if phase not in ('completed','abandoned') or length(trim(coalesce(p->>'reason','')))<3 then raise exception 'A completed match and correction reason are required'; end if;
+  return jsonb_set(st,'{phase}','"review"')-'result';
+ end if;
+ if act='abandon' then
+  if phase in ('completed','abandoned') then raise exception 'Reopen before changing a finalized match'; end if;
+  if length(trim(coalesce(p->>'reason','')))<3 then raise exception 'Enter the reason'; end if;
+  return jsonb_set(jsonb_set(st,'{phase}','"abandoned"'),'{result}','"no_result"');
+ end if;
+ if act='finalize' then
+  if phase<>'review' or idx<>1 then raise exception 'Complete both innings and review the scorecard first'; end if;
+  st:=jsonb_set(st,'{phase}','"completed"');
+  if (i->>'runs')::int >= (i->>'target')::int then tmp:=case when side='home' then 'won' else 'lost' end;
+  elsif (i->>'runs')::int=(i->>'target')::int-1 then tmp:='tied';
+  else tmp:=case when side='home' then 'lost' else 'won' end; end if;
+  return jsonb_set(st,'{result}',to_jsonb(tmp));
+ end if;
+ if act='target' then
+  if idx<>1 or phase not in ('live','review') then raise exception 'Revised target applies only to the chase'; end if;
+  if coalesce((p->>'target')::int,0)<1 or length(trim(coalesce(p->>'reason','')))<3 then raise exception 'Enter the official revised target and reason'; end if;
+  nr:=coalesce((p->>'limit')::int,(i->>'limit')::int);
+  if nr<(i->>'balls')::int or nr>600 or nr<1 then raise exception 'Invalid revised ball limit'; end if;
+  i:=jsonb_set(jsonb_set(i,'{target}',p->'target'),'{limit}',to_jsonb(nr));
+  i:=jsonb_set(i,'{target_note}',to_jsonb(p->>'reason'));
+  if (i->>'runs')::int >= (i->>'target')::int or (i->>'balls')::int >= nr then st:=jsonb_set(st,'{phase}','"review"'); end if;
+  return jsonb_set(st,array['innings',idx::text],i);
+ end if;
+ if phase<>'live' then raise exception 'This innings is not accepting deliveries'; end if;
+ select count(*)::int-1 into maxw from jsonb_array_elements(lu) x where x->>'side'=side;
+ if act='batters' then
+  tmp:=coalesce(nullif(p->>'striker',''),bat); outid:=coalesce(nullif(p->>'non_striker',''),nonbat);
+  if tmp='' or outid='' or tmp=outid then raise exception 'Select two different batters'; end if;
+  if bat<>'' and tmp<>bat or nonbat<>'' and outid<>nonbat then raise exception 'Use Swap ends with a reason to correct the strike'; end if;
+  for r in select value from jsonb_array_elements_text(jsonb_build_array(tmp,outid)) loop
+   if not exists(select 1 from jsonb_array_elements(lu) x where x->>'id'=r.value and x->>'side'=side) then raise exception 'Batter is not in this innings lineup'; end if;
+   if coalesce((bats->r.value->>'out')::boolean,false) then raise exception 'Dismissed batter cannot return'; end if;
+   b:=coalesce(bats->r.value,jsonb_build_object('runs',0,'balls',0,'fours',0,'sixes',0,'out',false,'batted',true));
+   b:=b-'retired'; bats:=jsonb_set(bats,array[r.value],b);
+  end loop;
+  i:=jsonb_set(jsonb_set(jsonb_set(i,'{striker}',to_jsonb(tmp)),'{non_striker}',to_jsonb(outid)),'{batters}',bats);
+ elsif act='bowler' then
+  tmp:=coalesce(nullif(p->>'id',''),nullif(p->>'player_id',''));
+  if bow<>'' then raise exception 'A bowler is already selected for this over'; end if;
+  -- Prefer the immutable lineup-row UUID. For older clients or migrated data,
+  -- reconcile by player_id/name, but always retain the opposite-side guard.
+  if not exists(select 1 from jsonb_array_elements(lu) x where x->>'id'=tmp and x->>'side'<>side) then
+   select x->>'id' into tmp
+   from jsonb_array_elements(lu) x
+   where x->>'side'<>side
+     and ((nullif(p->>'player_id','') is not null and x->>'player_id'=p->>'player_id')
+       or (nullif(p->>'name','') is not null and lower(trim(x->>'name'))=lower(trim(p->>'name'))))
+   limit 1;
+  end if;
+  if tmp is null or not exists(select 1 from jsonb_array_elements(lu) x where x->>'id'=tmp and x->>'side'<>side) then raise exception 'Choose a bowler from the fielding side'; end if;
+  if tmp=i->>'last_bowler' then raise exception 'A bowler cannot bowl consecutive overs'; end if;
+  limitbow:=(cfg->>'max_bowler_overs')::int*6;
+  if coalesce((bowls->tmp->>'balls')::int,0)>=limitbow then raise exception 'Bowler has reached the configured overs limit'; end if;
+  i:=jsonb_set(i,'{bowler}',to_jsonb(tmp));
+ elsif act='swap' then
+  if bat='' or nonbat='' or length(trim(coalesce(p->>'reason','')))<3 then raise exception 'Select both batters and enter a correction reason'; end if;
+  i:=jsonb_set(jsonb_set(i,'{striker}',to_jsonb(nonbat)),'{non_striker}',to_jsonb(bat));
+ elsif act='retire' then
+  outid:=p->>'id';
+  if outid not in (bat,nonbat) or outid='' or coalesce(p->>'kind','') not in ('hurt','out') then raise exception 'Choose a current batter and retirement type'; end if;
+  if length(trim(coalesce(p->>'reason','')))<3 then raise exception 'Enter the retirement reason'; end if;
+  b:=jsonb_set(bats->outid,'{retired}',to_jsonb(p->>'kind'));
+  if p->>'kind'='out' then b:=jsonb_set(b,'{out}','true');i:=public.hm_inc(i,'wickets',1); end if;
+  bats:=jsonb_set(bats,array[outid],b);
+  i:=jsonb_set(i,case when outid=bat then array['striker'] else array['non_striker'] end,'""');
+  i:=jsonb_set(i,'{batters}',bats);
+ elsif act='end_innings' then
+  if length(trim(coalesce(p->>'reason','')))<3 then raise exception 'Enter the innings-end reason'; end if;
+  i:=jsonb_set(i,'{end_note}',to_jsonb(p->>'reason'));
+  st:=jsonb_set(st,'{phase}',to_jsonb(case when idx=0 then 'break' else 'review' end));
+ elsif act='delivery' then
+  if bat='' or nonbat='' or bow='' then raise exception 'Select striker, non-striker and bowler first'; end if;
+  kind:=coalesce(p->>'kind','legal');nbkind:=coalesce(p->>'nb_kind','bat');dismiss:=coalesce(p->>'wicket','none');
+  nr:=coalesce((p->>'runs')::int,0);boundary:=coalesce((p->>'boundary')::int,0);
+  if nr<0 or nr>20 or kind not in ('legal','wide','noball','bye','legbye') or nbkind not in ('bat','bye','legbye') then raise exception 'Invalid runs or extras'; end if;
+  if boundary not in (0,4,6) or (boundary<>0 and (nr<>boundary or (kind<>'legal' and not(kind='noball' and nbkind='bat')))) then raise exception 'Boundary must be a four or six off the bat'; end if;
+  if dismiss not in ('none','bowled','caught','lbw','stumped','hit_wicket','run_out','obstructing_field','hit_ball_twice') then raise exception 'Unsupported dismissal'; end if;
+  if (kind='noball' or coalesce((i->>'free_hit')::boolean,false)) and dismiss not in ('none','run_out','obstructing_field','hit_ball_twice') then raise exception 'This dismissal is not allowed on a no-ball/free hit'; end if;
+  if kind='wide' and dismiss not in ('none','run_out','obstructing_field','stumped','hit_wicket') then raise exception 'This dismissal is not allowed on a wide'; end if;
+  if dismiss in ('bowled','caught','lbw','stumped','hit_wicket','hit_ball_twice') and nr<>0 then raise exception 'This dismissal cannot include completed runs'; end if;
+  if dismiss<>'none' and boundary<>0 then raise exception 'Do not combine a boundary with a dismissal'; end if;
+  total:=nr+case when kind in ('wide','noball') then 1 else 0 end;
+  batruns:=case when kind='legal' or (kind='noball' and nbkind='bat') then nr else 0 end;
+  legal:=case when kind in ('wide','noball') then 0 else 1 end;
+  faced:=case when kind='wide' then 0 else 1 end;
+  charged:=case when kind='wide' then total when kind='noball' then 1+batruns else batruns end;
+  extra:=i->'extras';
+  if kind='wide' then extra:=public.hm_inc(extra,'wide',total);
+  elsif kind='noball' then extra:=public.hm_inc(extra,'noball',1);if nbkind<>'bat' then extra:=public.hm_inc(extra,nbkind,nr);end if;
+  elsif kind in ('bye','legbye') then extra:=public.hm_inc(extra,kind,nr);end if;
+  b:=public.hm_inc(public.hm_inc(bats->bat,'runs',batruns),'balls',faced);
+  if boundary=4 then b:=public.hm_inc(b,'fours',1);elsif boundary=6 then b:=public.hm_inc(b,'sixes',1);end if;
+  bats:=jsonb_set(bats,array[bat],b);
+  bw:=coalesce(bowls->bow,jsonb_build_object('balls',0,'conceded',0,'wickets',0));
+  bw:=public.hm_inc(public.hm_inc(bw,'balls',legal),'conceded',charged);
+  if dismiss<>'none' then
+   outid:=coalesce(nullif(p->>'out_id',''),bat);
+   if outid not in (bat,nonbat) or (dismiss not in ('run_out','obstructing_field') and outid<>bat) then raise exception 'Invalid dismissed batter'; end if;
+   fielder:=coalesce(p->>'fielder','');
+   if dismiss in ('caught','run_out','stumped') then
+    if not exists(select 1 from jsonb_array_elements(lu) x where x->>'id'=fielder and x->>'side'<>side) then raise exception 'Select the responsible fielder'; end if;
+    fi:=coalesce(fields->fielder,'{}');
+    fi:=public.hm_inc(fi,case dismiss when 'caught' then 'catches' when 'stumped' then 'stumpings' else 'run_outs' end,1);
+    fields:=jsonb_set(fields,array[fielder],fi);
+   end if;
+   if dismiss in ('bowled','caught','lbw','stumped','hit_wicket') then bw:=public.hm_inc(bw,'wickets',1);end if;
+   bats:=jsonb_set(bats,array[outid,'out'],'true');
+   bats:=jsonb_set(bats,array[outid,'dismissal'],to_jsonb(dismiss));
+   i:=public.hm_inc(i,'wickets',1);
+  end if;
+  -- Completed runs change ends. Run-out crossing of an unfinished run is an explicit scorer decision.
+  if boundary=0 and nr%2=1 then tmp:=bat;bat:=nonbat;nonbat:=tmp;end if;
+  if dismiss in ('run_out','obstructing_field') and coalesce((p->>'crossed')::boolean,false) then tmp:=bat;bat:=nonbat;nonbat:=tmp;end if;
+  if dismiss<>'none' then if bat=outid then bat:='';else nonbat:='';end if;end if;
+  i:=public.hm_inc(public.hm_inc(i,'runs',total),'balls',legal);
+  if legal=1 and (i->>'balls')::int%6=0 then tmp:=bat;bat:=nonbat;nonbat:=tmp;i:=jsonb_set(i,'{last_bowler}',to_jsonb(bow));end if;
+  bowls:=jsonb_set(bowls,array[bow],bw);
+  i:=jsonb_set(jsonb_set(jsonb_set(i,'{batters}',bats),'{bowlers}',bowls),'{fielding}',fields);
+  i:=jsonb_set(jsonb_set(i,'{striker}',to_jsonb(bat)),'{non_striker}',to_jsonb(nonbat));
+  if legal=1 and (i->>'balls')::int%6=0 then i:=jsonb_set(i,'{bowler}','""');end if;
+  if kind='noball' then i:=jsonb_set(i,'{free_hit}',to_jsonb(coalesce((cfg->>'free_hit')::boolean,true)));
+  elsif legal=1 then i:=jsonb_set(i,'{free_hit}','false');end if;
+  recent:=(i->'recent')||jsonb_build_array(jsonb_build_object('runs',total,'kind',kind,'wicket',dismiss<>'none'));
+  if jsonb_array_length(recent)>12 then recent:=recent-0;end if;
+  i:=jsonb_set(jsonb_set(i,'{extras}',extra),'{recent}',recent);
+ else raise exception 'Unknown scoring command'; end if;
+ if (i->>'wickets')::int>=maxw or (i->>'balls')::int>=(i->>'limit')::int or ((i->>'target')::int>0 and (i->>'runs')::int>=(i->>'target')::int) then
+  st:=jsonb_set(st,'{phase}',to_jsonb(case when idx=0 then 'break' else 'review' end));
+ end if;
+ return jsonb_set(st,array['innings',idx::text],i);
+end $$;
+
+create or replace function public.hm_start_live(p_match uuid,p_revision int,p_config jsonb,p_home uuid[],p_away text[]) returns uuid
+language plpgsql security definer set search_path='' as $$
+declare m public.hm_matches; k int:=0; pid uuid; nm text; side text; ovs int; cap int;
+begin
+ if not public.hm_is_admin() then raise exception 'Admin access required'; end if;
+ if coalesce((select (config->'flags'->>'live')::boolean from public.hm_settings where id=1),true)=false then raise exception 'Enable Live scoring in Site controls first';end if;
+ select * into m from public.hm_matches where id=p_match for update;
+ if m.id is null or m.revision<>p_revision then raise exception 'Match changed. Reload before starting.';end if;
+ if m.status<>'upcoming' or exists(select 1 from public.hm_stats where match_id=p_match) then raise exception 'Start live scoring from an upcoming fixture without a completed scorecard';end if;
+ if p_home is null or p_away is null or cardinality(p_home) not between 2 and 11 or cardinality(p_away)<>cardinality(p_home) then raise exception 'Select equal lineups, 2–11 players per side';end if;
+ if (select count(distinct x) from unnest(p_home) x)<>cardinality(p_home) then raise exception 'Duplicate home player';end if;
+ if exists(select 1 from unnest(p_home) x where not exists(select 1 from public.hm_players where id=x and status='active')) then raise exception 'Choose active team players';end if;
+ ovs:=(p_config->>'overs')::int;cap:=(p_config->>'max_bowler_overs')::int;side:=p_config->>'first_batting';
+ if ovs is null or cap is null or side is null or ovs not between 1 and 100 or cap not between 1 and ovs or side not in ('home','away') then raise exception 'Invalid overs or batting side';end if;
+ if coalesce(p_config->>'toss_winner','') not in ('home','away') or coalesce(p_config->>'toss_decision','') not in ('bat','bowl') then raise exception 'Enter toss winner and decision';end if;
+ if side<>(case when p_config->>'toss_decision'='bat' then p_config->>'toss_winner' else case when p_config->>'toss_winner'='home' then 'away' else 'home' end end) then raise exception 'Batting side does not match the toss decision';end if;
+ if p_config ? 'free_hit' and jsonb_typeof(p_config->'free_hit')<>'boolean' then raise exception 'Invalid free-hit rule';end if;
+ p_config:=jsonb_build_object('overs',ovs,'max_bowler_overs',cap,'first_batting',side,'toss_winner',p_config->>'toss_winner','toss_decision',p_config->>'toss_decision','free_hit',coalesce((p_config->>'free_hit')::boolean,true));
+ insert into public.hm_live_matches(match_id,config,state,scorer,lease_until) values(p_match,p_config,jsonb_build_object('phase','live','innings',jsonb_build_array(public.hm_innings(side,ovs*6))),auth.uid(),now()+interval '2 minutes');
+ foreach pid in array p_home loop
+  k:=k+1;insert into public.hm_lineups(match_id,side,player_id,name,batting_order) select p_match,'home',id,name,k from public.hm_players where id=pid;
+ end loop;
+ k:=0;
+ foreach nm in array p_away loop
+  if nm is null or length(trim(nm)) not between 1 and 100 then raise exception 'Enter opponent player names (1–100 characters)';end if;
+  k:=k+1;insert into public.hm_lineups(match_id,side,name,batting_order) values(p_match,'away',trim(nm),k);
+ end loop;
+ update public.hm_matches set revision=revision+1 where id=p_match;
+ insert into public.hm_audit(actor,action,entity) values(auth.uid(),'live_started',p_match);
+ return p_match;
+end $$;
+
+create or replace function public.hm_live_claim(p_match uuid,p_takeover boolean default false) returns void
+language plpgsql security definer set search_path='' as $$
+declare l public.hm_live_matches;
+begin
+ if not public.hm_is_admin() then raise exception 'Admin access required';end if;
+ select * into l from public.hm_live_matches where match_id=p_match for update;
+ if l.match_id is null then raise exception 'Live match not found';end if;
+ if l.scorer is distinct from auth.uid() and l.lease_until>now() and not p_takeover then raise exception 'Another admin is scoring. Use Take over to continue.';end if;
+ if l.scorer is distinct from auth.uid() then insert into public.hm_audit(actor,action,entity) values(auth.uid(),'scorer_takeover',p_match);end if;
+ update public.hm_live_matches set scorer=auth.uid(),lease_until=now()+interval '2 minutes' where match_id=p_match;
+end $$;
+
+create or replace function public.hm_live_command(p_match uuid,p_revision int,p_request uuid,p_action text,p_payload jsonb) returns jsonb
+language plpgsql security definer set search_path='' as $$
+declare l public.hm_live_matches; st jsonb; ev public.hm_live_events; lu jsonb; r record; i jsonb; b jsonb; bw jsonb; fi jsonb;
+ rr int; bf int; fours int; sixes int; wk int; bb int; con int; ca int; ro int; su int; did boolean; nt boolean;
+begin
+ if not public.hm_is_admin() then raise exception 'Admin access required';end if;
+ select * into l from public.hm_live_matches where match_id=p_match for update;
+ if l.match_id is null then raise exception 'Live match not found';end if;
+ select * into ev from public.hm_live_events where id=p_request;
+ if ev.id is not null then
+  if ev.match_id<>p_match or ev.action<>p_action or ev.payload<>p_payload then raise exception 'Request ID already used for a different command';end if;
+  return jsonb_build_object('revision',l.revision,'state',l.state,'duplicate',true);
+ end if;
+ if p_request is null or p_revision is null or p_action is null or p_payload is null then raise exception 'Missing scoring request fields';end if;
+ if p_revision<>l.revision then raise exception 'Score changed. Reload before submitting.';end if;
+ if l.scorer is distinct from auth.uid() or l.lease_until<now() then raise exception 'Claim scoring control before submitting';end if;
+ if p_action not in ('audience','reopen','abandon') and coalesce((select (config->'flags'->>'live')::boolean from public.hm_settings where id=1),true)=false then raise exception 'Live scoring is disabled in Site controls';end if;
+ select jsonb_agg(to_jsonb(x) order by side,batting_order) into lu from public.hm_lineups x where match_id=p_match;
+ if p_action='audience' then
+  if p_payload->>'audience' not in ('public','team','admin') then raise exception 'Invalid audience';end if;
+  update public.hm_matches set audience=p_payload->>'audience',published=coalesce((p_payload->>'published')::boolean,published),revision=revision+1 where id=p_match;
+  st:=l.state;
+ elsif p_action in ('undo','rewind') then
+  if l.state->>'phase' in ('completed','abandoned') then raise exception 'Reopen the match before correcting it';end if;
+  if length(trim(coalesce(p_payload->>'reason','')))<3 then raise exception 'Enter a correction reason';end if;
+  select * into ev from public.hm_live_events where match_id=p_match and not voided and action not in ('undo','rewind','audience','reopen','finalize','abandon')
+   and (p_action='undo' or revision=(p_payload->>'revision')::int) order by revision desc limit 1;
+  if ev.id is null then raise exception 'No scoring event to undo';end if;
+  st:=ev.before_state;
+  update public.hm_live_events set voided=true where match_id=p_match and revision>=ev.revision and action not in ('audience','undo','rewind','reopen');
+ else st:=public.hm_reduce(l.state,p_action,p_payload,lu,l.config);end if;
+ if p_action in ('reopen','undo','rewind') then
+  delete from public.hm_stats where match_id=p_match;
+  update public.hm_matches set status='upcoming',result=null,team_runs=null,team_wickets=null,team_balls=null,opponent_runs=null,opponent_wickets=null,opponent_balls=null,revision=revision+1 where id=p_match;
+ end if;
+ if p_action in ('finalize','abandon') then
+  delete from public.hm_stats where match_id=p_match;
+  for r in select * from public.hm_lineups where match_id=p_match and side='home' loop
+   rr:=0;bf:=0;fours:=0;sixes:=0;wk:=0;bb:=0;con:=0;ca:=0;ro:=0;su:=0;did:=false;nt:=false;
+   for i in select value from jsonb_array_elements(st->'innings') loop
+    b:=i->'batters'->r.id::text;bw:=i->'bowlers'->r.id::text;fi:=i->'fielding'->r.id::text;
+    if b is not null then did:=true;nt:=not coalesce((b->>'out')::boolean,false);end if;
+    rr:=rr+coalesce((b->>'runs')::int,0);bf:=bf+coalesce((b->>'balls')::int,0);fours:=fours+coalesce((b->>'fours')::int,0);sixes:=sixes+coalesce((b->>'sixes')::int,0);
+    wk:=wk+coalesce((bw->>'wickets')::int,0);bb:=bb+coalesce((bw->>'balls')::int,0);con:=con+coalesce((bw->>'conceded')::int,0);
+    ca:=ca+coalesce((fi->>'catches')::int,0);ro:=ro+coalesce((fi->>'run_outs')::int,0);su:=su+coalesce((fi->>'stumpings')::int,0);
+   end loop;
+   if p_action='finalize' then insert into public.hm_stats(match_id,player_id,batted,runs,balls,not_out,fours,sixes,wickets,bowling_balls,conceded,catches,run_outs,stumpings)
+    values(p_match,r.player_id,did,rr,bf,nt,fours,sixes,wk,bb,con,ca,ro,su);end if;
+  end loop;
+  for i in select value from jsonb_array_elements(st->'innings') loop
+   if i->>'side'='home' then update public.hm_matches set team_runs=(i->>'runs')::int,team_wickets=(i->>'wickets')::int,team_balls=(i->>'balls')::int where id=p_match;
+   else update public.hm_matches set opponent_runs=(i->>'runs')::int,opponent_wickets=(i->>'wickets')::int,opponent_balls=(i->>'balls')::int where id=p_match;end if;
+  end loop;
+  update public.hm_matches set status=case when p_action='abandon' then 'abandoned' else 'completed' end,result=st->>'result',revision=revision+1 where id=p_match;
+ end if;
+ insert into public.hm_live_events(id,match_id,revision,action,payload,before_state,after_state,actor) values(p_request,p_match,l.revision+1,p_action,p_payload,l.state,st,auth.uid());
+ update public.hm_live_matches set state=st,revision=revision+1,updated_at=now(),lease_until=now()+interval '2 minutes' where match_id=p_match;
+ return jsonb_build_object('revision',l.revision+1,'state',st,'duplicate',false);
+end $$;
+
+commit;

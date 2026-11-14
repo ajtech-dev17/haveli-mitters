@@ -2,7 +2,7 @@ import { S, e, t, n, metrics, date } from "./core.js";
 import { overs } from "./stats.js";
 export function liveMarkup(v, compact = false) {
   if (!v)
-    return `<div class="empty"><strong>${t("No live match available")}</strong><p>${t("A live match will appear here when the captain publishes it.")}</p><a class="btn secondary" href="player.html">${t("Player login")}</a></div>`;
+    return `<div class="empty"><strong>${t("No live match available")}</strong><p>${t("A live match will appear here when the captain publishes it.")}</p></div>`;
   const st = v.state,
     innings = st.innings || [],
     current = innings.at(-1),

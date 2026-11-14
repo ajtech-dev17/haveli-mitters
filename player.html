@@ -1,53 +1,13 @@
 <!doctype html>
-<html lang="en" dir="ltr" data-theme="dark">
+<html lang="en" dir="ltr">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#171310" />
-    <meta
-      name="description"
-      content="Haveli Mitters official team portal. Squad, cricket statistics, fixtures and our winning moments."
-    />
-    <meta name="referrer" content="strict-origin-when-cross-origin" />
     <meta name="robots" content="noindex, nofollow" />
-    <title>Player login · Haveli Mitters</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27/%3E" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <script>
-      try {
-        const t = localStorage.getItem("hm-theme"),
-          l = localStorage.getItem("hm-language");
-        if (t) document.documentElement.dataset.theme = t;
-        if (l) {
-          document.documentElement.lang = l;
-          document.documentElement.dir = l === "ur" ? "rtl" : "ltr";
-        }
-      } catch {}
-    </script>
-    <link rel="stylesheet" href="assets/css/portal.css" />
-    <script defer src="assets/vendor/supabase-2.119.0.js"></script>
-    <script src="assets/js/config.js"></script>
-    <script defer src="assets/js/startup.js"></script>
-    <script type="module" src="assets/js/player.js"></script>
+    <meta http-equiv="refresh" content="0; url=admin.html" />
+    <title>Admin access · Haveli Mitters</title>
   </head>
-  <body data-page="player">
-    <a class="skip-link" href="#main">Skip to content / مرکزی مواد</a>
-    <div id="header"></div>
-    <main id="main" tabindex="-1">
-      <div class="loading-state" role="status">
-        <span class="brand-loading-ring" aria-hidden="true"></span>
-        <p>Loading the clubhouse… / لوڈ ہو رہا ہے</p>
-      </div>
-    </main>
-    <div id="footer"></div>
-    <dialog id="modal" aria-label="Details"></dialog>
-    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-    <noscript
-      ><div class="wrap error-banner">
-        Please enable JavaScript to use this team portal. براہ کرم جاوا اسکرپٹ
-        فعال کریں۔
-      </div></noscript
-    >
+  <body>
+    <p>Player login is disabled. <a href="admin.html">Open Captain’s Desk</a>.</p>
+    <script>location.replace("admin.html");</script>
   </body>
 </html>

@@ -75,7 +75,7 @@ export function profile(id) {
   if (!canSeeStats(id)) {
     dialog(
       local(p, "name"),
-      `<div class="profile-intro"><div class="player-photo">${photo(p)}</div><p>#${p.jersey} · ${t(p.role)}</p><p>${t("Private statistics")}</p><a class="btn secondary" href="player.html">${t("Player login")}</a></div>`,
+      `<div class="profile-intro"><div class="player-photo">${photo(p)}</div><p>#${p.jersey} · ${t(p.role)}</p><p>${t("Private statistics")}</p></div>`,
     );
     return;
   }
