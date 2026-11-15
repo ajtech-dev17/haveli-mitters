@@ -2149,3 +2149,22 @@ button:disabled {
     animation: none;
   }
 }
+
+
+/* =========================================
+   PLAYER PROFILE MODAL IMAGE FIX
+   ========================================= */
+dialog .player-photo {
+  height: 220px !important;
+  max-width: 220px !important;
+  margin: 0 auto 16px auto !important;
+  border-radius: 16px !important;
+  overflow: hidden !important;
+}
+
+dialog .player-photo img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  object-position: top center !important;
+}
