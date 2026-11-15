@@ -2245,3 +2245,30 @@ dialog .dialog-body .eyebrow {
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important; /* Mobile par 4 ki jagah 3 columns taake jagah bache */
   }
 }
+
+/* =========================================================
+   DIALOG / PROFILE MODAL CENTER SCREEN FIX
+   ========================================================= */
+dialog {
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  margin: 0 !important;
+  max-height: 85vh !important;
+  width: min(750px, calc(100% - 32px)) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  z-index: 9999 !important;
+}
+
+/* Jab bhi modal khule, background page scroll hona band ho jaye */
+body:has(dialog[open]) {
+  overflow: hidden !important;
+}
+
+dialog::backdrop {
+  background: rgba(0, 0, 0, 0.75) !important;
+  backdrop-filter: blur(6px) !important;
+}
