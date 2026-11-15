@@ -2168,3 +2168,80 @@ dialog .player-photo img {
   object-fit: cover !important;
   object-position: top center !important;
 }
+
+
+/* =========================================================
+   PLAYER PROFILE MODAL — NO-SCROLL SINGLE SCREEN FIT FIX
+   ========================================================= */
+
+/* Modal box ki maximum height screen ke mutabiq lock kar dein */
+dialog {
+  max-height: 88vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+/* Modal ka head apni jagah fix rahega */
+dialog .dialog-head {
+  flex-shrink: 0;
+}
+
+/* Modal ka andar wala poora content area ek compact grid ban jaye */
+dialog .dialog-body {
+  flex: 1;
+  overflow-y: auto !important; /* Agar zaroorat paray toh sirf andar wala data scroll ho, poora page nahi */
+  padding: 18px 24px !important;
+}
+
+/* Profile header (Tasveer aur Naam wala hissa) ko chota aur compact karna */
+dialog .dialog-body .row:first-of-type {
+  margin-bottom: 12px !important;
+}
+
+dialog .dialog-body .player-photo {
+  width: 75px !important;
+  height: 75px !important;
+  min-height: 75px !important;
+  border-radius: 12px !important;
+}
+
+/* Stats ke blocks (Batting, Bowling, Fielding) ko tight aur chota karna */
+dialog .dialog-body .grid.cols4,
+dialog .dialog-body .grid.cols3 {
+  gap: 8px !important;
+  margin-top: 6px !important;
+}
+
+dialog .dialog-body .metric {
+  padding: 10px 12px !important;
+  border-radius: 10px !important;
+}
+
+dialog .dialog-body .metric strong {
+  font-size: 20px !important; /* Numbers ka size thora compact kar diya */
+}
+
+dialog .dialog-body .metric small {
+  font-size: 9.5px !important;
+}
+
+/* Eyebrow headings ka gap kam karna */
+dialog .dialog-body .eyebrow {
+  font-size: 9.5px !important;
+  margin: 14px 0 6px 0 !important;
+}
+
+/* Mobile screens ke liye mazeed compact styling */
+@media (max-width: 580px) {
+  dialog {
+    width: 95% !important;
+    max-height: 92vh !important;
+  }
+  dialog .dialog-body {
+    padding: 12px 16px !important;
+  }
+  dialog .dialog-body .grid.cols4 {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important; /* Mobile par 4 ki jagah 3 columns taake jagah bache */
+  }
+}
