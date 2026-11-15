@@ -22,6 +22,25 @@
       message(
         "The clubhouse is taking a little longer",
         "Check your connection and reload this page. / اپنا انٹرنیٹ کنکشن چیک کریں اور صفحہ دوبارہ کھولیں۔",
+
+        // --- SQUAD SYSTEM STARTUP DISPATCHER ---
+document.addEventListener('DOMContentLoaded', () => {
+    const pageType = document.body.getAttribute('data-page');
+
+    if (pageType === 'admin') {
+        setTimeout(() => {
+            if (typeof renderAdminSquadManager === 'function') {
+                renderAdminSquadManager();
+            }
+        }, 500); // Thoda delay taaki DOM fully load ho jaye
+    } else if (pageType === 'team') {
+        setTimeout(() => {
+            if (typeof renderActiveTeamSquad === 'function') {
+                renderActiveTeamSquad();
+            }
+        }, 500);
+    }
+});
       ),
     18000,
   );
