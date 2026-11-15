@@ -186,3 +186,69 @@ if (db()) {
   } else if (mode === "register") register();
   else login();
 } else login();
+
+
+// --- ADMIN PANEL: QUICK SQUAD MANAGER ---
+function renderAdminSquadManager() {
+    const mainContainer = document.getElementById('main');
+    if (!mainContainer) return;
+
+    // LocalStorage se players fetch karna
+    let players = JSON.parse(localStorage.getItem('haveli_players')) || [];
+
+    // Pehle se section mojood na ho toh create karein
+    let squadManagerDiv = document.getElementById('quickSquadManagerSection');
+    if (!squadManagerDiv) {
+        squadManagerDiv = document.createElement('div');
+        squadManagerDiv.id = 'quickSquadManagerSection';
+        squadManagerDiv.innerHTML = `
+            <div style="margin: 20px 0; padding: 20px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;">
+                <h3 style="margin-top:0; color: var(--accent-color, #f39c12);">⚡ Quick Squad Manager (Match Day Toggle)</h3>
+                <p style="font-size: 0.9em; opacity: 0.8;">Match ke liye jis player ko squad mein rakhna ho, uska switch ON karein.</p>
+                <div id="adminToggleList" style="display: flex; flex-direction: column; gap: 10px; margin-top: 15px;"></div>
+            </div>
+        `;
+        mainContainer.appendChild(squadManagerDiv);
+    }
+
+    const listContainer = document.getElementById('adminToggleList');
+    if (!listContainer) return;
+    listContainer.innerHTML = '';
+
+    if (players.length === 0) {
+        listContainer.innerHTML = '<p>Koi player registered nahi hai. Pehle player add karein.</p>';
+        return;
+    }
+
+    players.forEach(player => {
+        const row = document.createElement('div');
+        row.style.cssText = "display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: rgba(0,0,0,0.2); border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);";
+
+        row.innerHTML = `
+            <div>
+                <strong style="font-size: 1.05em;">${player.name}</strong> 
+                <span style="font-size: 0.85em; opacity: 0.6; margin-left: 8px;">(${player.role || 'Player'})</span>
+            </div>
+            <label style="cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 500;">
+                <input type="checkbox" 
+                       style="width: 18px; height: 18px; cursor: pointer;"
+                       ${player.inSquad ? 'checked' : ''} 
+                       onchange="togglePlayerSquad('${player.id}', this.checked)">
+                <span>In Squad</span>
+            </label>
+        `;
+        listContainer.appendChild(row);
+    });
+}
+
+// Toggle switch change hone par status update aur save karne ka function
+window.togglePlayerSquad = function(playerId, isChecked) {
+    let players = JSON.parse(localStorage.getItem('haveli_players')) || [];
+    const player = players.find(p => p.id == playerId || p.name == playerId);
+    
+    if (player) {
+        player.inSquad = isChecked;
+        localStorage.setItem('haveli_players', JSON.stringify(players));
+        console.log(`Squad Updated: ${player.name} -> inSquad: ${isChecked}`);
+    }
+};
