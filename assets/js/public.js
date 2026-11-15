@@ -540,25 +540,53 @@ async function init() {
 window.addEventListener("pagehide", () => clearInterval(timer));
 if (page !== "player") init();
 
+/* =========================================================
+   OUR TEAM PAGE — POSTER LAYOUT (CAPTAIN LEFT + GRID RIGHT)
+   ========================================================= */
 function team() {
   const list = S.players
     .filter((p) => p.status === "active")
     .sort((a, b) => a.display_order - b.display_order || a.jersey - b.jersey);
   const captain = list.find((p) => p.leadership === "captain");
-  const card = (p, large = false) =>
-    `<article class="panel team-card ${large ? "captain-card" : ""}"><div class="team-portrait">${photo(p)}<span class="jersey">#${p.jersey}</span></div><div class="team-caption"><span class="eyebrow">${t(large ? "Captain" : p.leadership === "vice_captain" ? "Vice captain" : p.role)}</span><h${large ? "2" : "3"}>${e(local(p, "name"))}</h${large ? "2" : "3"}><p class="note">${t(p.role)} · #${p.jersey}</p><button class="text-btn" data-player="${p.id}">${t("View profile")} →</button></div></article>`;
-  main.innerHTML =
-    head(
-      "Our team",
-      "One team. One standard.",
-      "The captain. The players. The Mitters.",
-    ) +
-    `<section class="wrap section">${captain ? card(captain, true) : ""}<div class="section-title"><h2>${t("Full squad")}</h2><span class="badge">${list.length} ${t("Players")}</span></div><div class="grid cols4">${
-      list
-        .filter((p) => p.id !== captain?.id)
-        .map((p) => card(p))
-        .join("") || (!captain ? empty() : "")
-    }</div><p class="note">${t("The full squad may include more than eleven players. Match lineups appear on Live match.")}</p></section>`;
+  const others = list.filter((p) => p.id !== captain?.id);
+
+  const posterCard = (p, isCaptain = false) => `
+    <article class="panel team-card ${isCaptain ? "captain-poster-card" : "squad-poster-card"}" data-player="${p.id}" role="button" tabindex="0">
+      <div class="team-portrait">
+        ${photo(p)}
+        <span class="jersey">#${e(p.jersey)}</span>
+        ${isCaptain ? `<span class="captain-tag">C</span>` : ""}
+      </div>
+      <div class="poster-bar">
+        <div class="poster-name-en">
+          <span>${e(local(p, "name"))}</span>
+          ${isCaptain ? `<span class="c-pill">(C)</span>` : ""}
+        </div>
+        <div class="poster-sub">
+          ${p.name_ur ? `<span>${e(p.name_ur)}</span>` : `<span>${t(p.role)}</span>`}
+        </div>
+      </div>
+    </article>
+  `;
+
+  main.innerHTML = `
+    <section class="wrap poster-section">
+      <div class="poster-header">
+        <div>
+          <p class="eyebrow" style="margin-bottom:6px">${t("One team. One standard.")}</p>
+          <h1 class="poster-title">${e(local(S.config, "brand_name") || "HAVELI MITTERS")} ${t("Squad")}</h1>
+        </div>
+        <span class="badge">${list.length} ${t("Players")}</span>
+      </div>
+
+      <div class="poster-board ${captain ? "has-captain" : "no-captain"}">
+        ${captain ? `<div class="poster-left">${posterCard(captain, true)}</div>` : ""}
+        <div class="poster-right">
+          ${others.map((p) => posterCard(p, false)).join("") || (!captain ? empty() : "")}
+        </div>
+      </div>
+    </section>
+  `;
   bindCards();
 }
 
