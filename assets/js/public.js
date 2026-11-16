@@ -27,6 +27,7 @@ import {
 } from "./core.js";
 import { aggregate, overs, seasonSummary } from "./stats.js";
 import { sessionIdentityChanged } from "./session-refresh.js";
+
 const main = $("#main");
 const complete = () => S.matches.filter((m) => m.status === "completed");
 const rows = (id, season = "") =>
@@ -48,18 +49,49 @@ const initials = (s) =>
 const button = (label, href) =>
   `<a class="btn" href="${href}">${t(label)} <span>→</span></a>`;
 let timer;
+
 export function photo(p) {
   return p._photo || (p.photo_url && url(p.photo_url))
     ? `<img src="${e(p._photo || url(p.photo_url))}" alt="${e(local(p, "name"))}" loading="lazy">`
     : `<span class="initials">${e(initials(local(p, "name")))}</span>`;
 }
+
 function playerCard(p) {
   const s = aggregate(rows(p.id));
-  return `<article class="panel player feature"><div class="player-photo">${photo(p)}<span class="jersey">#${p.jersey}</span></div><div class="player-body"><div class="row between"><span class="label">${t(p.role)}</span><span class="badge">${t(p.status)}</span></div><h3 style="margin-top:12px">${e(local(p, "name"))}</h3>${canSeeStats(p.id) ? `<div class="numbers"><div><small>${t("Runs")}</small><strong>${n(s.runs)}</strong></div><div><small>${t("Wickets")}</small><strong>${n(s.wickets)}</strong></div><div><small>${t("Played")}</small><strong>${s.matches}</strong></div></div>` : `<p class="restricted">${t("Private statistics")}</p>`}<button class="text-btn" data-player="${p.id}">${t("View profile")} →</button></div></article>`;
+  const bat = local(p, "batting_style");
+  const bowl = local(p, "bowling_style");
+  const styles = [bat, bowl].filter(Boolean).join(" · ");
+
+  return `<article class="panel player feature">
+    <div class="player-photo">
+      ${photo(p)}
+      <span class="jersey">#${e(p.jersey)}</span>
+    </div>
+    <div class="player-body">
+      <div class="row between">
+        <span class="label">${t(p.role)}</span>
+        <span class="badge">${t(p.status)}</span>
+      </div>
+      <h3 style="margin-top:12px; margin-bottom:4px">${e(local(p, "name"))}</h3>
+      ${styles ? `<p class="note" style="margin-bottom:0; font-size:12px">${e(styles)}</p>` : ""}
+      ${
+        canSeeStats(p.id)
+          ? `<div class="numbers">
+              <div><small>${t("Runs")}</small><strong>${n(s.runs)}</strong></div>
+              <div><small>${t("Wickets")}</small><strong>${n(s.wickets)}</strong></div>
+              <div><small>${t("Played")}</small><strong>${s.matches}</strong></div>
+            </div>`
+          : `<p class="restricted">${t("Private statistics")}</p>`
+      }
+      <button class="text-btn" data-player="${p.id}">${t("View profile")} →</button>
+    </div>
+  </article>`;
 }
+
 function matchCard(m) {
   return `<article class="panel feature"><div class="row between"><span class="label">${e(m.season)}</span><span class="badge ${e(m.result || "")}">${t(m.result || m.status)}</span></div><h3 style="margin-top:20px">${e(local(S.config, "brand_name"))} <span class="muted">vs</span><br>${e(local(m, "opponent"))}</h3><p class="note">${date(m.starts_at)} · ${e(local(m, "venue") || t("Venue to be confirmed"))}</p><div class="row between"><div class="result-score ltr">${score(m)}<small>${m.team_balls != null ? overs(m.team_balls) + " " + t("Overs") : t("To be announced")}</small></div>${m.status === "completed" ? `<button class="btn secondary" data-match="${m.id}">${t("Scorecard")} →</button>` : `<span class="badge">${t("Toss")} · ${m.toss_at ? date(m.toss_at) : "—"}</span>`}</div></article>`;
 }
+
 function bindCards() {
   $$("[data-player]").forEach(
     (b) => (b.onclick = () => profile(b.dataset.player)),
@@ -69,6 +101,7 @@ function bindCards() {
   );
   safeImages();
 }
+
 export function profile(id) {
   const p = S.players.find((p) => p.id === id);
   if (!p) return;
@@ -138,6 +171,7 @@ export function profile(id) {
   );
   safeImages($("#modal"));
 }
+
 function scorecard(id) {
   const m = S.matches.find((m) => m.id === id);
   const list = S.stats.filter((s) => s.match_id === id);
@@ -146,6 +180,7 @@ function scorecard(id) {
     `<p class="label">${date(m.starts_at)} · ${e(local(m, "venue"))}</p><div class="grid cols2"><div class="metric"><small>${e(local(S.config, "brand_name"))}</small><strong class="ltr">${score(m)}</strong><small>${overs(m.team_balls || 0)} ${t("Overs")}</small></div><div class="metric"><small>${e(local(m, "opponent"))}</small><strong class="ltr">${m.opponent_runs ?? "—"}/${m.opponent_wickets ?? "—"}</strong><small>${overs(m.opponent_balls || 0)} ${t("Overs")}</small></div></div><p style="margin:20px 0" class="note">${e(local(m, "summary"))}</p><p class="note">${t("Only permitted player figures are shown. Team totals may include restricted players.")}</p><div class="table-wrap"><table><thead><tr>${["Player", "Runs", "Balls", "Wickets", "Overs", "Conceded", "Catches", "Run outs", "Stumpings"].map((k) => "<th>" + t(k) + "</th>").join("")}</tr></thead><tbody>${list.map((r) => `<tr><td>${e(local(S.players.find((p) => p.id === r.player_id) || { name: "—" }, "name"))}</td><td>${r.batted ? r.runs + (r.not_out ? "*" : "") : t("DNB")}</td><td>${r.balls}</td><td>${r.wickets}</td><td>${overs(r.bowling_balls)}</td><td>${r.conceded}</td><td>${r.catches}</td><td>${r.run_outs}</td><td>${r.stumpings}</td></tr>`).join("") || '<tr><td colspan="9">' + t("No records yet") + "</td></tr>"}</tbody></table></div>`,
   );
 }
+
 function home() {
   const next = S.matches
     .filter(
@@ -208,6 +243,7 @@ function home() {
     timer = setInterval(update, 1000);
   }
 }
+
 function squad() {
   main.innerHTML =
     head("Squad", "Meet the Mitters.") +
@@ -229,7 +265,8 @@ function squad() {
       sort = $("#sort").value;
     let list = S.players.filter(
       (p) =>
-        (role === "all" || p.role === role) &&
+        (role === "all" ||
+          (p.role || "").toLowerCase().replace(/[\s-]+/g, "_") === role) &&
         [p.name, p.name_ur, p.jersey].join(" ").toLowerCase().includes(q),
     );
     list.sort((a, b) =>
@@ -257,6 +294,7 @@ function squad() {
   );
   draw();
 }
+
 function matches() {
   main.innerHTML =
     head("Matches", "Fixtures & results.") +
@@ -283,6 +321,7 @@ function matches() {
   $("#status").onchange = draw;
   draw();
 }
+
 function stats() {
   const seasons = [...new Set(complete().map((m) => m.season))]
     .sort()
@@ -326,6 +365,7 @@ function stats() {
   $("#search").oninput = draw;
   draw();
 }
+
 function moments() {
   const media = S.media.filter((m) => m.kind === "moment"),
     categories = [...new Set(media.map((m) => m.category))];
@@ -367,6 +407,7 @@ function moments() {
   $("#category").onchange = draw;
   draw();
 }
+
 export function videoMarkup(value) {
   const safe = url(value);
   if (!safe) return "";
@@ -384,6 +425,7 @@ export function videoMarkup(value) {
     return `<video src="${e(safe)}" controls preload="none" playsinline></video>`;
   return `<a class="btn secondary" href="${e(safe)}" target="_blank" rel="noopener noreferrer">${t("Watch")} →</a>`;
 }
+
 function social() {
   main.innerHTML =
     head("Social & media", "Stay in the loop.") +
@@ -420,6 +462,7 @@ function social() {
   $("#search").oninput = draw;
   draw();
 }
+
 function locationPage() {
   main.innerHTML =
     head("Location", "Our home. Our next stop.") +
@@ -438,6 +481,7 @@ function locationPage() {
     draw();
   }, 30000);
 }
+
 async function init() {
   await settings();
   shell();
@@ -496,27 +540,56 @@ async function init() {
 window.addEventListener("pagehide", () => clearInterval(timer));
 if (page !== "player") init();
 
+/* =========================================================
+   OUR TEAM PAGE — POSTER LAYOUT (CAPTAIN LEFT + GRID RIGHT)
+   ========================================================= */
 function team() {
   const list = S.players
     .filter((p) => p.status === "active" && p.inSquad !== false)
     .sort((a, b) => a.display_order - b.display_order || a.jersey - b.jersey);
   const captain = list.find((p) => p.leadership === "captain");
-  const card = (p, large = false) =>
-    `<article class="panel team-card ${large ? "captain-card" : ""}"><div class="team-portrait">${photo(p)}<span class="jersey">#${p.jersey}</span></div><div class="team-caption"><span class="eyebrow">${t(large ? "Captain" : p.leadership === "vice_captain" ? "Vice captain" : p.role)}</span><h${large ? "2" : "3"}>${e(local(p, "name"))}</h${large ? "2" : "3"}><p class="note">${t(p.role)} · #${p.jersey}</p><button class="text-btn" data-player="${p.id}">${t("View profile")} →</button></div></article>`;
-  main.innerHTML =
-    head(
-      "Our team",
-      "One team. One standard.",
-      "The captain. The players. The Mitters.",
-    ) +
-    `<section class="wrap section">${captain ? card(captain, true) : ""}<div class="section-title"><h2>${t("Full squad")}</h2><span class="badge">${list.length} ${t("Players")}</span></div><div class="grid cols4">${
-      list
-        .filter((p) => p.id !== captain?.id)
-        .map((p) => card(p))
-        .join("") || (!captain ? empty() : "")
-    }</div><p class="note">${t("The full squad may include more than eleven players. Match lineups appear on Live match.")}</p></section>`;
+  const others = list.filter((p) => p.id !== captain?.id);
+
+  const posterCard = (p, isCaptain = false) => `
+    <article class="panel team-card ${isCaptain ? "captain-poster-card" : "squad-poster-card"}" data-player="${p.id}" role="button" tabindex="0">
+      <div class="team-portrait">
+        ${photo(p)}
+        <span class="jersey">#${e(p.jersey)}</span>
+        ${isCaptain ? `<span class="captain-tag">C</span>` : ""}
+      </div>
+      <div class="poster-bar">
+        <div class="poster-name-en">
+          <span>${e(local(p, "name"))}</span>
+          ${isCaptain ? `<span class="c-pill">(C)</span>` : ""}
+        </div>
+        <div class="poster-sub">
+          ${p.name_ur ? `<span>${e(p.name_ur)}</span>` : `<span>${t(p.role)}</span>`}
+        </div>
+      </div>
+    </article>
+  `;
+
+  main.innerHTML = `
+    <section class="wrap poster-section">
+      <div class="poster-header">
+        <div>
+          <p class="eyebrow" style="margin-bottom:6px">${t("One team. One standard.")}</p>
+          <h1 class="poster-title">${e(local(S.config, "brand_name") || "HAVELI MITTERS")} ${t("Squad")}</h1>
+        </div>
+        <span class="badge">${list.length} ${t("Players")}</span>
+      </div>
+
+      <div class="poster-board ${captain ? "has-captain" : "no-captain"}">
+        ${captain ? `<div class="poster-left">${posterCard(captain, true)}</div>` : ""}
+        <div class="poster-right">
+          ${others.map((p) => posterCard(p, false)).join("") || (!captain ? empty() : "")}
+        </div>
+      </div>
+    </section>
+  `;
   bindCards();
 }
+
 let policyTimer;
 if (db() && page !== "player") {
   let stamp = null;

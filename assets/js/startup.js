@@ -22,6 +22,7 @@
       message(
         "The clubhouse is taking a little longer",
         "Check your connection and reload this page. / اپنا انٹرنیٹ کنکشن چیک کریں اور صفحہ دوبارہ کھولیں۔",
+
       ),
     18000,
   );
