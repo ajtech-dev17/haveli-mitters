@@ -29,6 +29,7 @@ create table if not exists public.hm_players (
  role text not null check(role in ('batter','bowler','all_rounder','wicket_keeper')),
  batting_style text, batting_style_ur text, bowling_style text, bowling_style_ur text,
  photo_url text, status text not null default 'active' check(status in ('active','retired','removed')),
+ in_squad boolean not null default true,
  published boolean not null default false, created_at timestamptz default now()
 );
 create unique index if not exists hm_active_jersey on public.hm_players(jersey) where status='active';

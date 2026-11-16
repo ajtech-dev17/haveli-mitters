@@ -5,6 +5,7 @@ alter table public.hm_players add column if not exists stats_visibility text not
 alter table public.hm_players add column if not exists leadership text not null default 'player' check(leadership in ('player','captain','vice_captain'));
 alter table public.hm_players add column if not exists display_order int not null default 0;
 alter table public.hm_players add column if not exists photo_path text;
+alter table public.hm_players add column if not exists in_squad boolean not null default true;
 create unique index if not exists hm_active_captain on public.hm_players(leadership) where leadership='captain' and status='active';
 create unique index if not exists hm_active_vice on public.hm_players(leadership) where leadership='vice_captain' and status='active';
 alter table public.hm_matches add column if not exists audience text not null default 'public' check(audience in ('public','team','admin'));

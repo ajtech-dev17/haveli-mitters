@@ -255,7 +255,7 @@ function collection() {
         (!pub || x.published === (pub === "live")),
     );
     $("#records").innerHTML = list.length
-      ? `<div class="table-wrap"><table><thead><tr><th>${t("Name")}</th><th>${t("Status")}</th><th>${t("Date")}</th><th>${t("Edit")}</th></tr></thead><tbody>${list.map((x) => `<tr><td><strong>${e(local(x, table === "players" ? "name" : table === "matches" ? "opponent" : "title"))}</strong><br><small>${e(table === "players" ? "#" + x.jersey + " · " + t(x.role) : table === "matches" ? x.season + " · " + t(x.status) : t(x.kind) + " · " + t(x.category))}</small></td><td><span class="badge">${t(x.published ? "Published" : "Draft")}</span></td><td>${date(x.starts_at || x.created_at, true)}</td><td><button class="text-btn" data-edit="${x.id}">${t("Edit")} →</button></td></tr>`).join("")}</tbody></table></div>`
+      ? `<div class="table-wrap"><table><thead><tr><th>${t("Name")}</th><th>${t("Status")}</th>${table === "players" ? `<th>${t("In Squad")}</th>` : ""}<th>${t("Date")}</th><th>${t("Edit")}</th></tr></thead><tbody>${list.map((x) => `<tr><td><strong>${e(local(x, table === "players" ? "name" : table === "matches" ? "opponent" : "title"))}</strong><br><small>${e(table === "players" ? "#" + x.jersey + " · " + t(x.role) : table === "matches" ? x.season + " · " + t(x.status) : t(x.kind) + " · " + t(x.category))}</small></td><td><span class="badge">${t(x.published ? "Published" : "Draft")}</span></td>${table === "players" ? `<td><label><input type="checkbox" data-squad-toggle="${x.id}" ${x.inSquad !== false ? "checked" : ""}> <span class="sr-only">${t("In Squad")}</span></label></td>` : ""}<td>${date(x.starts_at || x.created_at, true)}</td><td><button class="text-btn" data-edit="${x.id}">${t("Edit")} →</button></td></tr>`).join("")}</tbody></table></div>`
       : empty(q ? "Nothing matches your search" : "No records yet");
     $$("[data-edit]").forEach(
       (b) =>
@@ -265,6 +265,31 @@ function collection() {
             items.find((x) => x.id === b.dataset.edit),
           )),
     );
+    if (table === "players")
+      $$(`[data-squad-toggle]`).forEach((input) => {
+        input.onchange = async () => {
+          const player = items.find((x) => x.id === input.dataset.squadToggle);
+          if (!player) return;
+          const next = input.checked;
+          input.disabled = true;
+          try {
+            await api(
+              db()
+                .from("hm_players")
+                .update({ in_squad: next })
+                .eq("id", player.id),
+            );
+            player.inSquad = next;
+            toast(t("Saved."));
+            draw();
+          } catch (err) {
+            input.checked = !next;
+            toast(err.message, true);
+          } finally {
+            input.disabled = false;
+          }
+        };
+      });
   }
   $("#admin-search").oninput = draw;
   $("#publication").onchange = draw;
@@ -427,6 +452,7 @@ function editor(table, record) {
             payload.photo_url !== record.photo_url
           )
             payload.photo_path = null;
+          payload.in_squad = record.id ? record.inSquad !== false : true;
         } else if (file) payload.url = await upload(file);
         if (table === "media" && !url(payload.url))
           throw Error(t("Add a valid https URL or upload a file."));

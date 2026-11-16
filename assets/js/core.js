@@ -167,7 +167,13 @@ export async function all(table, publicOnly = false) {
       q = q.eq("published", true);
     if (publicOnly && table === "players") q = q.neq("status", "removed");
     const data = await api(q);
-    out.push(...data);
+    out.push(
+      ...data.map((row) =>
+        table === "players"
+          ? { ...row, inSquad: row.in_squad !== false }
+          : row,
+      ),
+    );
     if (data.length < 500) break;
   }
   return out;

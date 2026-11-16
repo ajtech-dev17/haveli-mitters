@@ -498,7 +498,7 @@ if (page !== "player") init();
 
 function team() {
   const list = S.players
-    .filter((p) => p.status === "active")
+    .filter((p) => p.status === "active" && p.inSquad !== false)
     .sort((a, b) => a.display_order - b.display_order || a.jersey - b.jersey);
   const captain = list.find((p) => p.leadership === "captain");
   const card = (p, large = false) =>
