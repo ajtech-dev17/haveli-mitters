@@ -2293,3 +2293,100 @@ dialog[open] {
   overflow: hidden !important;
   z-index: 9999 !important;
 }
+
+/* ---- Season leaders: Orange / Purple Cap cards ---- */
+.cap-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+.cap-card {
+  position: relative;
+  display: flex;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--panel2);
+  overflow: hidden;
+}
+.cap-card::after {
+  content: "";
+  position: absolute;
+  inset-inline-end: -40px;
+  top: -40px;
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  filter: blur(38px);
+  opacity: 0.3;
+  pointer-events: none;
+  background: var(--cap-tone);
+}
+.cap-card.orange {
+  --cap-tone: #fb923c;
+}
+.cap-card.purple {
+  --cap-tone: #a78bfa;
+}
+.cap-icon {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  font-size: 26px;
+  border: 1px solid var(--cap-tone);
+  background: color-mix(in srgb, var(--cap-tone) 16%, transparent);
+}
+.cap-body {
+  position: relative;
+  min-width: 0;
+  flex: 1;
+}
+.cap-body h3 {
+  margin: 10px 0 6px;
+  overflow-wrap: anywhere;
+}
+.cap-score {
+  color: var(--cap-tone);
+}
+.cap-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.cap-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+  color: var(--muted);
+}
+.cap-list b {
+  color: var(--text);
+}
+@media (max-width: 640px) {
+  .cap-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---- Match poster tools (scorecard dialog) ---- */
+.poster-tools {
+  margin: 18px 0;
+}
+.poster-preview {
+  display: block;
+  width: min(100%, 360px);
+  height: auto;
+  margin-top: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+}

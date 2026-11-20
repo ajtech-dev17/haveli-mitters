@@ -24,9 +24,16 @@ import {
   clearPortraits,
   refreshReadableStats,
   canSeeStats,
+  toast,
 } from "./core.js";
 import { aggregate, overs, seasonSummary } from "./stats.js";
 import { sessionIdentityChanged } from "./session-refresh.js";
+import {
+  buildPosterModel,
+  drawPoster,
+  canvasToBlob,
+  shareText,
+} from "./poster.js";
 
 const main = $("#main");
 const complete = () => S.matches.filter((m) => m.status === "completed");
@@ -175,10 +182,51 @@ export function profile(id) {
 function scorecard(id) {
   const m = S.matches.find((m) => m.id === id);
   const list = S.stats.filter((s) => s.match_id === id);
-  dialog(
+  const d = dialog(
     t("Scorecard"),
-    `<p class="label">${date(m.starts_at)} · ${e(local(m, "venue"))}</p><div class="grid cols2"><div class="metric"><small>${e(local(S.config, "brand_name"))}</small><strong class="ltr">${score(m)}</strong><small>${overs(m.team_balls || 0)} ${t("Overs")}</small></div><div class="metric"><small>${e(local(m, "opponent"))}</small><strong class="ltr">${m.opponent_runs ?? "—"}/${m.opponent_wickets ?? "—"}</strong><small>${overs(m.opponent_balls || 0)} ${t("Overs")}</small></div></div><p style="margin:20px 0" class="note">${e(local(m, "summary"))}</p><p class="note">${t("Only permitted player figures are shown. Team totals may include restricted players.")}</p><div class="table-wrap"><table><thead><tr>${["Player", "Runs", "Balls", "Wickets", "Overs", "Conceded", "Catches", "Run outs", "Stumpings"].map((k) => "<th>" + t(k) + "</th>").join("")}</tr></thead><tbody>${list.map((r) => `<tr><td>${e(local(S.players.find((p) => p.id === r.player_id) || { name: "—" }, "name"))}</td><td>${r.batted ? r.runs + (r.not_out ? "*" : "") : t("DNB")}</td><td>${r.balls}</td><td>${r.wickets}</td><td>${overs(r.bowling_balls)}</td><td>${r.conceded}</td><td>${r.catches}</td><td>${r.run_outs}</td><td>${r.stumpings}</td></tr>`).join("") || '<tr><td colspan="9">' + t("No records yet") + "</td></tr>"}</tbody></table></div>`,
+    `<p class="label">${date(m.starts_at)} · ${e(local(m, "venue"))}</p><div class="grid cols2"><div class="metric"><small>${e(local(S.config, "brand_name"))}</small><strong class="ltr">${score(m)}</strong><small>${overs(m.team_balls || 0)} ${t("Overs")}</small></div><div class="metric"><small>${e(local(m, "opponent"))}</small><strong class="ltr">${m.opponent_runs ?? "—"}/${m.opponent_wickets ?? "—"}</strong><small>${overs(m.opponent_balls || 0)} ${t("Overs")}</small></div></div><p style="margin:20px 0" class="note">${e(local(m, "summary"))}</p>${m.result ? `<div class="poster-tools"><div class="row"><button class="btn" data-poster-download>${t("Download poster")}</button><button class="btn secondary" data-poster-share>${t("Share on WhatsApp")}</button></div><canvas class="poster-preview" data-poster-canvas aria-label="${t("Match poster preview")}"></canvas></div>` : ""}<p class="note">${t("Only permitted player figures are shown. Team totals may include restricted players.")}</p><div class="table-wrap"><table><thead><tr>${["Player", "Runs", "Balls", "Wickets", "Overs", "Conceded", "Catches", "Run outs", "Stumpings"].map((k) => "<th>" + t(k) + "</th>").join("")}</tr></thead><tbody>${list.map((r) => `<tr><td>${e(local(S.players.find((p) => p.id === r.player_id) || { name: "—" }, "name"))}</td><td>${r.batted ? r.runs + (r.not_out ? "*" : "") : t("DNB")}</td><td>${r.balls}</td><td>${r.wickets}</td><td>${overs(r.bowling_balls)}</td><td>${r.conceded}</td><td>${r.catches}</td><td>${r.run_outs}</td><td>${r.stumpings}</td></tr>`).join("") || '<tr><td colspan="9">' + t("No records yet") + "</td></tr>"}</tbody></table></div>`,
   );
+  if (m.result) wirePoster(d, m);
+}
+
+function wirePoster(d, m) {
+  const canvas = d.querySelector("[data-poster-canvas]");
+  if (!canvas) return;
+  const model = buildPosterModel({
+    match: m,
+    stats: S.stats,
+    players: S.players,
+    brand: local(S.config, "brand_name"),
+    canSee: canSeeStats,
+    nameOf: (p) => local(p, "name"),
+    opponent: local(m, "opponent"),
+    venue: local(m, "venue") || "",
+    dateText: date(m.starts_at, true),
+  });
+  const logo = url(S.config.logo_url) || "";
+  const ready = drawPoster(canvas, model, logo).catch(() => null);
+  d.querySelector("[data-poster-download]").onclick = async () => {
+    try {
+      await ready;
+      const blob = await canvasToBlob(canvas);
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "match-poster-" + (m.starts_at || "").slice(0, 10) + ".png";
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    } catch {
+      toast(t("Poster could not be created"), true);
+    }
+  };
+  d.querySelector("[data-poster-share]").onclick = () =>
+    window.open(
+      "https://wa.me/?text=" +
+        encodeURIComponent(
+          shareText(model, new URL("matches.html", location.href).href),
+        ),
+      "_blank",
+      "noopener",
+    );
 }
 
 function home() {
@@ -196,20 +244,35 @@ function home() {
       p,
       s: aggregate(rows(p.id, season)),
     }));
-  const runs = leaders.slice().sort((a, b) => b.s.runs - a.s.runs)[0],
-    wickets = leaders.slice().sort((a, b) => b.s.wickets - a.s.wickets)[0];
   main.innerHTML = `<section class="hero"><div class="wrap hero-grid"><div><p class="eyebrow">${t("One team. One standard.")}</p><h1>${e(local(S.config, "headline"))}</h1><p class="intro">${e(local(S.config, "subtitle"))}</p><div class="row">${flag("squad") ? button("Explore the squad", "squad.html") : ""}${flag("matches") ? '<a class="btn secondary" href="matches.html">' + t("View matches") + " →</a>" : ""}</div><div class="hero-foot"><span><strong>${S.players.filter((p) => p.status === "active").length}</strong>${t("Players")}</span><span><strong>${complete().length}</strong>${t("Matches")}</span><span><strong>${complete().filter((m) => m.result === "won").length}</strong>${t("Won")}</span></div></div><div><div class="crest">${flag("orbit") ? '<i class="orbit"></i><i class="orbit o2"></i><i class="orbit o3"></i>' : ""}${url(S.config.logo_url) ? `<img src="${e(url(S.config.logo_url))}" alt="${e(local(S.config, "brand_name"))}" width="330" height="330" fetchpriority="high">` : ""}</div><p class="crest-note">${e(local(S.config, "brand_name"))} · ${e(season)}</p></div></div></section>
  <section class="wrap section"><div class="grid cols2"><article class="panel"><div class="row between"><p class="eyebrow">${t("Next fixture")}</p><span class="badge">${next ? e(next.season) : "HM"}</span></div>${next ? `<h2>vs ${e(local(next, "opponent"))}</h2><p class="note">${e(local(next, "venue"))} · ${date(next.starts_at)}<br>${t("Toss")} · ${date(next.toss_at)}</p>${flag("countdown") ? '<div class="countdown" id="countdown"></div>' : ""}` : `<h3>${t("No fixture announced")}</h3><p class="note">${t("The next match will appear here once confirmed.")}</p>`}</article>
  ${
    flag("leaders")
-     ? `<article class="panel"><p class="eyebrow">${t("Season leaders")} · ${e(season)}</p><p class="note">${t("Among visible player statistics")}</p><div class="grid cols2">${[
-         ["Top run scorer", runs, "runs", "Runs"],
-         ["Top wicket taker", wickets, "wickets", "Wickets"],
+     ? `<article class="panel"><p class="eyebrow">${t("Season leaders")} · ${e(season)}</p><p class="note">${t("Among visible player statistics")}</p><div class="cap-grid">${[
+         ["orange", "Orange Cap", "Top run scorer", "runs", "Runs"],
+         ["purple", "Purple Cap", "Top wicket taker", "wickets", "Wickets"],
        ]
-         .map(
-           ([label, a, k, unit]) =>
-             `<div><span class="label">${t(label)}</span><h3 style="margin:12px 0">${a && a.s[k] > 0 ? e(local(a.p, "name")) : t("Awaiting scorecards")}</h3><div class="result-score gold">${a ? n(a.s[k]) : "—"} <small>${t(unit)}</small></div></div>`,
-         )
+         .map(([tone, cap, label, k, unit]) => {
+           const list = leaders
+             .filter((a) => a.s[k] > 0)
+             .sort((x, y) => y.s[k] - x.s[k])
+             .slice(0, 3);
+           return `<div class="cap-card ${tone}"><span class="cap-icon" aria-hidden="true">🧢</span><div class="cap-body"><span class="label">${t(cap)} · ${t(label)}</span>${
+             list[0]
+               ? `<h3>${e(local(list[0].p, "name"))}</h3><div class="result-score cap-score">${n(list[0].s[k])} <small>${t(unit)}</small></div>${
+                   list.length > 1
+                     ? `<ol class="cap-list">${list
+                         .slice(1)
+                         .map(
+                           (a, i) =>
+                             `<li><span>${i + 2}. ${e(local(a.p, "name"))}</span><b>${n(a.s[k])}</b></li>`,
+                         )
+                         .join("")}</ol>`
+                     : ""
+                 }`
+               : `<h3>${t("Awaiting scorecards")}</h3>`
+           }</div></div>`;
+         })
          .join("")}</div></article>`
      : ""
  }</div></section>
